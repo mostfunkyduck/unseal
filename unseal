@@ -1,0 +1,75 @@
+#!/bin/bash
+set -e
+
+usage() {
+  >&2 echo
+  >&2 echo "$0: runs a given command after decrypting a configuration file beforehand"
+  >&2 echo
+  >&2 echo 'decrypted configuration will be stored on disk with 0600 permissions during execution and then re-encrypted afterwards'
+  >&2 echo 'this allows editing the configuration through the command and having those changes persist in the encrypted file'
+  >&2 echo
+  >&2 echo 'Usage:'
+  >&2 echo
+  >&2 echo "$0 <configuration file> <command> [arguments...]"
+  >&2 echo
+}
+
+checkDependencies() {
+  if ! command -v gpg &>/dev/null; then
+    >&2 echo 'gpg is not installed, cannot proceed'
+    exit 1
+  fi
+}
+
+# outputs decrypted contents of a given file
+# user will have to mash in a passphrase for gpg
+decrypt() {
+  local file
+  file=$1
+  if [ -z "$file" ]; then
+    >&2 echo 'please specify a configuration file to decrypt'
+    >&2 echo
+    usage
+    exit 1
+  fi
+  gpg --decrypt -q "$file"
+}
+
+# will encrypt a file, user will be prompted for which recipient and all that
+encrypt() {
+  local file
+  file=$1
+  if [ -z "$file" ]; then
+    >&2 echo 'please specify a file to encrypt'
+    >&2 echo
+    usage
+    exit 1
+  fi
+
+  gpg --encrypt -q --yes "$file"
+}
+
+execute() {
+  local configurationFile
+  local decryptedLocation
+  configurationFile=$1
+  shift
+  cmdWithArgs=$*
+  if [ "${configurationFile: -4}" != '.gpg'  ]; then
+    >&2 echo 'encrypted configuration file did not have .gpg extension!'
+    exit 1
+  fi
+  decryptedLocation=${configurationFile%.gpg}
+  decryptedContents="$(decrypt "$configurationFile")"
+  echo "$decryptedContents" > "$decryptedLocation"
+  # shellcheck disable=SC2064
+  trap "encrypt $decryptedLocation || true; rm $decryptedLocation" EXIT
+  $cmdWithArgs
+}
+
+if [ $# -lt 2 ]; then
+  usage
+  exit 1
+fi
+checkDependencies
+execute "$@"
