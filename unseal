@@ -25,6 +25,7 @@ checkDependencies() {
 # user will have to mash in a passphrase for gpg
 decrypt() {
   local file
+  local dir
   file=$1
   if [ -z "$file" ]; then
     >&2 echo 'please specify a configuration file to decrypt'
@@ -32,12 +33,15 @@ decrypt() {
     usage
     exit 1
   fi
+
   gpg --decrypt -q "$file"
 }
 
 # will encrypt a file, user will be prompted for which recipient and all that
 encrypt() {
   local file
+  local dir
+  local fname
   file=$1
   if [ -z "$file" ]; then
     >&2 echo 'please specify a file to encrypt'
@@ -45,13 +49,23 @@ encrypt() {
     usage
     exit 1
   fi
-
-  gpg --encrypt -q --yes "$file"
+  # gpgtar doesn't consistently work, so we do it by hand
+  if [ -d "$file" ]; then
+    dir="$(dirname "$file")"
+    fname="$(basename "$file")"
+    tar -C "$dir" -cvf "${fname}.tar" "$file" &>/dev/null || true
+    rm -fr "$file"
+    file="$fname"
+  fi
+  gpg --encrypt -q --yes "${file}"
 }
 
 execute() {
+  local dir
   local configurationFile
   local decryptedLocation
+  local cmdWithArgs
+ 
   configurationFile=$1
   shift
   cmdWithArgs=$*
@@ -59,11 +73,12 @@ execute() {
     >&2 echo 'encrypted configuration file did not have .gpg extension!'
     exit 1
   fi
+  dir=$(dirname "$configurationFile")
   decryptedLocation=${configurationFile%.gpg}
-  decryptedContents="$(decrypt "$configurationFile")"
-  echo "$decryptedContents" > "$decryptedLocation"
+  decrypt "$configurationFile" > "$decryptedLocation"
+  tar -C "$dir" -xvf "$decryptedLocation" &>/dev/null || true # may not be a tar
   # shellcheck disable=SC2064
-  trap "encrypt $decryptedLocation || true; rm $decryptedLocation" EXIT
+  trap "encrypt $decryptedLocation || true; rm $decryptedLocation; rm -fr ${decryptedLocation%.tar}" EXIT
   $cmdWithArgs
 }
 
