@@ -68,6 +68,11 @@ execute() {
     exit 1
   fi
 
+  # create the target location and give it the same permissions as the encrypted file
+  touch "$decryptedLocation"
+  chown --reference="$configurationFile" "$decryptedLocation"
+  chmod --reference="$configurationFile" "$decryptedLocation"
+
   decrypt "$configurationFile" > "$decryptedLocation"
   # shellcheck disable=SC2064
   trap "encrypt $decryptedLocation || true; rm $decryptedLocation" EXIT
