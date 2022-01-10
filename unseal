@@ -53,7 +53,9 @@ execute() {
   local configurationFile
   local decryptedLocation
   local cmdWithArgs
- 
+  local chown
+  local chmod
+
   configurationFile=$1
   shift
   cmdWithArgs=$*
@@ -70,8 +72,25 @@ execute() {
 
   # create the target location and give it the same permissions as the encrypted file
   touch "$decryptedLocation"
-  chown --reference="$configurationFile" "$decryptedLocation"
-  chmod --reference="$configurationFile" "$decryptedLocation"
+
+  chown='chown'
+
+  # mac doesn't support the '--reference' arg to chown and chmod that we use to copy permissions, so unless
+  # coreutils is installed, we can't progress
+  if [ "$(uname)" == "Darwin" ]; then
+    # use 'gchmod' as an indicator as to whether coreutils is installed
+    if ! command -v gchmod &> /dev/null; then
+      echo "cannot change permissions of file to match .gpg file, please install 'coreutils' to get this functionality"
+      chown=''
+      chmod=''
+    else
+      chown='gchown'
+      chmod='gchmod'
+    fi
+  fi
+
+  [ -n "$chown" ] && $chown --reference="$configurationFile" "$decryptedLocation"
+  [ -n "$chmod" ] && $chmod --reference="$configurationFile" "$decryptedLocation"
 
   decrypt "$configurationFile" > "$decryptedLocation" || rm "$decryptedLocation"
   # shellcheck disable=SC2064
