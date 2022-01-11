@@ -74,6 +74,7 @@ execute() {
   touch "$decryptedLocation"
 
   chown='chown'
+  chmod='chmod'
 
   # mac doesn't support the '--reference' arg to chown and chmod that we use to copy permissions, so unless
   # coreutils is installed, we can't progress
