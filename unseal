@@ -16,7 +16,7 @@ usage() {
 
 checkDependencies() {
   if ! command -v gpg &>/dev/null; then
-    >&2 echo 'gpg is not installed, cannot proceed'
+    >&2 echo "$0: gpg is not installed, cannot proceed"
     exit 1
   fi
 }
@@ -27,7 +27,7 @@ decrypt() {
   local file
   file=$1
   if [ -z "$file" ]; then
-    >&2 echo 'please specify a configuration file to decrypt'
+    >&2 echo "$0: please specify a configuration file to decrypt"
     >&2 echo
     usage
     exit 1
@@ -41,7 +41,7 @@ encrypt() {
   local file
   file=$1
   if [ -z "$file" ]; then
-    >&2 echo 'please specify a file to encrypt'
+    >&2 echo "$0: please specify a file to encrypt"
     >&2 echo
     usage
     exit 1
@@ -60,13 +60,13 @@ execute() {
   shift
   cmdWithArgs=$*
   if [ "${configurationFile: -4}" != '.gpg'  ]; then
-    >&2 echo 'encrypted configuration file did not have .gpg extension!'
+    >&2 echo "$0: encrypted configuration file did not have .gpg extension!"
     exit 1
   fi
   decryptedLocation=${configurationFile%.gpg}
 
   if [ -f "$decryptedLocation" ]; then
-    echo "decrypted version of file already exists! will exit instead of overwriting"
+    echo "$0: decrypted version of file already exists! will exit instead of overwriting"
     exit 1
   fi
 
@@ -81,7 +81,7 @@ execute() {
   if [ "$(uname)" == "Darwin" ]; then
     # use 'gchmod' as an indicator as to whether coreutils is installed
     if ! command -v gchmod &> /dev/null; then
-      echo "cannot change permissions of file to match .gpg file, please install 'coreutils' to get this functionality"
+      echo "$0: cannot change permissions of file to match .gpg file, please install 'coreutils' to get this functionality"
       chown=''
       chmod=''
     else
@@ -93,7 +93,11 @@ execute() {
   [ -n "$chown" ] && $chown --reference="$configurationFile" "$decryptedLocation"
   [ -n "$chmod" ] && $chmod --reference="$configurationFile" "$decryptedLocation"
 
-  decrypt "$configurationFile" > "$decryptedLocation" || rm "$decryptedLocation" && exit 1
+  if ! decrypt "$configurationFile" > "$decryptedLocation"; then
+    echo "$0: decryption failed!"
+    rm "$decryptedLocation"
+    exit 1
+  fi
   # shellcheck disable=SC2064
   trap "encrypt $decryptedLocation || true; rm $decryptedLocation" EXIT
   $cmdWithArgs
