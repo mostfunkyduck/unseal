@@ -93,7 +93,7 @@ execute() {
   [ -n "$chown" ] && $chown --reference="$configurationFile" "$decryptedLocation"
   [ -n "$chmod" ] && $chmod --reference="$configurationFile" "$decryptedLocation"
 
-  decrypt "$configurationFile" > "$decryptedLocation" || rm "$decryptedLocation"
+  decrypt "$configurationFile" > "$decryptedLocation" || rm "$decryptedLocation" && exit 1
   # shellcheck disable=SC2064
   trap "encrypt $decryptedLocation || true; rm $decryptedLocation" EXIT
   $cmdWithArgs
