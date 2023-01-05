@@ -39,67 +39,63 @@ decrypt() {
 # will encrypt a file, user will be prompted for which recipient and all that
 encrypt() {
   local file
+  local extension
+  local tmpFileName
   file=$1
+  extension=$2
   if [ -z "$file" ]; then
     >&2 echo "$0: please specify a file to encrypt"
     >&2 echo
     usage
     exit 1
   fi
-  gpg --encrypt -q --yes "${file}"
+
+  [ -z "$extension" ] && extension="pgp"
+  tmpFileName="$(mktemp)"
+  # make a new copy in case gpg fails and corrupts the existing one
+  gpg --encrypt -q --yes -o "$tmpFileName" "$file"
+
+  # now that we know gpg isn't failing, copy the new one to the location of the old one
+  mv "$tmpFileName" "${file}.${extension}"
 }
 
 execute() {
   local configurationFile
   local decryptedLocation
   local cmdWithArgs
-  local chown
-  local chmod
+  local extension
 
   configurationFile=$1
   shift
   cmdWithArgs=$*
-  if [ "${configurationFile: -4}" != '.gpg'  ]; then
-    >&2 echo "$0: encrypted configuration file did not have .gpg extension!"
+
+  extension="${configurationFile##*.}"
+
+  if [ "$extension" != 'gpg'  ] && [ "$extension" != 'pgp' ]; then
+    >&2 echo "$0: encrypted configuration file '$configurationFile' did not have .gpg or .pgp extension (had '$extension')!"
     exit 1
   fi
-  decryptedLocation=${configurationFile%.gpg}
+  decryptedLocation=${configurationFile%.*}
 
   if [ -f "$decryptedLocation" ]; then
-    echo "$0: decrypted version of file already exists! will exit instead of overwriting"
+    echo "$0: decrypted version of file already exists at '$decryptedLocation' ! will exit instead of overwriting"
     exit 1
   fi
 
-  # create the target location and give it the same permissions as the encrypted file
+  # create the target location and give it secure permissions
   touch "$decryptedLocation"
 
-  chown='chown'
-  chmod='chmod'
-
-  # mac doesn't support the '--reference' arg to chown and chmod that we use to copy permissions, so unless
-  # coreutils is installed, we can't progress
-  if [ "$(uname)" == "Darwin" ]; then
-    # use 'gchmod' as an indicator as to whether coreutils is installed
-    if ! command -v gchmod &> /dev/null; then
-      echo "$0: cannot change permissions of file to match .gpg file, please install 'coreutils' to get this functionality"
-      chown=''
-      chmod=''
-    else
-      chown='gchown'
-      chmod='gchmod'
-    fi
-  fi
-
-  [ -n "$chown" ] && $chown --reference="$configurationFile" "$decryptedLocation"
-  [ -n "$chmod" ] && $chmod --reference="$configurationFile" "$decryptedLocation"
+  chown "$USER:$USER" "$decryptedLocation"
+  chmod 0600 "$decryptedLocation"
 
   if ! decrypt "$configurationFile" > "$decryptedLocation"; then
     echo "$0: decryption failed!"
     rm "$decryptedLocation"
     exit 1
   fi
+
   # shellcheck disable=SC2064
-  trap "encrypt $decryptedLocation || true; rm $decryptedLocation" EXIT
+  trap "encrypt $decryptedLocation $extension || true; rm $decryptedLocation" EXIT
   $cmdWithArgs
 }
 
