@@ -53,7 +53,7 @@ encrypt() {
   [ -z "$extension" ] && extension="pgp"
   tmpFileName="$(mktemp)"
   # make a new copy in case gpg fails and corrupts the existing one
-  gpg --encrypt --openpgp -q --yes -o "$tmpFileName" "$file"
+  gpg --encrypt --openpgp -q --yes -o "$tmpFileName" "$file" || return
 
   # now that we know gpg isn't failing, copy the new one to the location of the old one
   mv "$tmpFileName" "${file}.${extension}"
